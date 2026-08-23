@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
-import { PATIENT_CHANNEL, PATIENT_UPDATE_EVENT } from "@/lib/realtime";
+import {
+  PATIENT_CHANNEL,
+  PATIENT_RESET_EVENT,
+  PATIENT_UPDATE_EVENT,
+} from "@/lib/realtime";
 
 import type { Patient } from "@/types/patient";
 
@@ -15,23 +19,60 @@ type PatientUpdate = {
   updatedAt: string;
 };
 
+type PatientFieldProps = {
+  label: string;
+  value?: string;
+};
+
+const STATUS_CONFIG: Record<
+  PatientStatus,
+  {
+    label: string;
+    containerClassName: string;
+    dotClassName: string;
+  }
+> = {
+  active: {
+    label: "Active",
+    containerClassName: "bg-green-100 text-green-700",
+    dotClassName: "bg-green-500",
+  },
+  submitted: {
+    label: "Submitted",
+    containerClassName: "bg-blue-100 text-blue-700",
+    dotClassName: "bg-blue-500",
+  },
+  inactive: {
+    label: "Inactive",
+    containerClassName: "bg-gray-100 text-gray-600",
+    dotClassName: "bg-gray-400",
+  },
+};
+
 export default function StaffView() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [status, setStatus] = useState<PatientStatus>("inactive");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
-  // Keep track of the newest event we've already processed.
-  const latestUpdatedAtRef = useRef<number>(0);
+  const latestUpdatedAtRef = useRef(0);
 
   useEffect(() => {
     const channel = supabase
       .channel(PATIENT_CHANNEL)
+      .on("broadcast", { event: PATIENT_RESET_EVENT }, () => {
+        setPatient(null);
+        setStatus("inactive");
+        setLastUpdated(null);
+        latestUpdatedAtRef.current = 0;
+
+        console.log("Patient form reset");
+      })
       .on("broadcast", { event: PATIENT_UPDATE_EVENT }, (payload) => {
         const data = payload.payload as PatientUpdate;
-
         const incomingUpdatedAt = new Date(data.updatedAt).getTime();
 
-        // Ignore older events that arrive late.
+        // Ignore stale events that arrive late.
         if (incomingUpdatedAt <= latestUpdatedAtRef.current) {
           console.log("Ignoring stale realtime event:", data);
           return;
@@ -39,11 +80,11 @@ export default function StaffView() {
 
         latestUpdatedAtRef.current = incomingUpdatedAt;
 
-        console.log("Staff received:", data);
-
         setPatient(data.patient);
         setStatus(data.status);
         setLastUpdated(data.updatedAt);
+
+        console.log("Staff received:", data);
       })
       .subscribe((channelStatus, error) => {
         console.log("Staff Realtime status:", channelStatus);
@@ -53,7 +94,16 @@ export default function StaffView() {
         }
 
         if (channelStatus === "SUBSCRIBED") {
+          setIsConnected(true);
           console.log("Staff Realtime connected ✅");
+          return;
+        }
+
+        if (
+          channelStatus === "CHANNEL_ERROR" ||
+          channelStatus === "TIMED_OUT"
+        ) {
+          setIsConnected(false);
         }
       });
 
@@ -69,15 +119,16 @@ export default function StaffView() {
 
     const interval = setInterval(() => {
       const lastUpdateTime = new Date(lastUpdated).getTime();
-      const now = Date.now();
 
-      if (now - lastUpdateTime >= 5000) {
+      if (Date.now() - lastUpdateTime >= 5000) {
         setStatus("inactive");
       }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [lastUpdated, status]);
+
+  const statusConfig = STATUS_CONFIG[status];
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -93,24 +144,18 @@ export default function StaffView() {
         </div>
 
         <span
-          className={`rounded-full px-3 py-1 text-sm font-medium ${
-            status === "active"
-              ? "bg-green-100 text-green-700"
-              : status === "submitted"
-                ? "bg-blue-100 text-blue-700"
-                : "bg-gray-100 text-gray-600"
-          }`}
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${statusConfig.containerClassName}`}
         >
-          {status === "active"
-            ? "Active"
-            : status === "submitted"
-              ? "Submitted"
-              : "Inactive"}
+          <span
+            className={`h-2 w-2 rounded-full ${statusConfig.dotClassName}`}
+          />
+
+          {statusConfig.label}
         </span>
       </div>
 
       {patient ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid min-w-0 gap-4 md:grid-cols-2">
           <PatientField label="First Name" value={patient.firstName} />
 
           <PatientField label="Middle Name" value={patient.middleName} />
@@ -144,7 +189,7 @@ export default function StaffView() {
 
           <PatientField label="Religion" value={patient.religion} />
 
-          <div className="md:col-span-2">
+          <div className="min-w-0 md:col-span-2">
             <PatientField label="Address" value={patient.address} />
           </div>
         </div>
@@ -163,17 +208,14 @@ export default function StaffView() {
   );
 }
 
-type PatientFieldProps = {
-  label: string;
-  value?: string;
-};
-
 function PatientField({ label, value }: PatientFieldProps) {
   return (
-    <div className="rounded-xl border border-gray-200 p-4">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 p-4">
       <p className="text-sm text-gray-500">{label}</p>
 
-      <p className="mt-1 font-medium text-gray-900">{value || "-"}</p>
+      <p className="mt-1 min-w-0 break-words whitespace-pre-wrap font-medium text-gray-900">
+        {value || "-"}
+      </p>
     </div>
   );
 }

@@ -1,13 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import PhoneInput from "react-phone-number-input";
 
 import { patientSchema } from "@/lib/validation";
 import { supabase } from "@/lib/supabase";
-import { PATIENT_CHANNEL, PATIENT_UPDATE_EVENT } from "@/lib/realtime";
+import {
+  PATIENT_CHANNEL,
+  PATIENT_UPDATE_EVENT,
+  PATIENT_RESET_EVENT,
+} from "@/lib/realtime";
+
 import type { Patient } from "@/types/patient";
+import type { Country } from "@/types/country";
+import type { Language } from "@/types/language";
+
+const inputClassName =
+  "h-12 w-full rounded-xl border border-gray-300 bg-white px-4 text-gray-900 outline-none transition focus:border-black placeholder:text-gray-400";
+
+const selectClassName =
+  "h-12 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none transition focus:border-black";
+
+const textareaClassName =
+  "w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-black placeholder:text-gray-400";
 
 export default function PatientForm() {
   const {
@@ -34,15 +51,18 @@ export default function PatientForm() {
     },
   });
 
-  const patient = useWatch({
-    control,
-  });
+  const patient = useWatch({ control });
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const hasSubmittedRef = useRef(false);
 
   const [isConnected, setIsConnected] = useState(false);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [languages, setLanguages] = useState<Language[]>([]);
 
-  const hasSubmittedRef = useRef(false);
+  const hasPatientInput = Object.values(patient).some(
+    (value) => typeof value === "string" && value.trim() !== "",
+  );
 
   const onSubmit = async (data: Patient) => {
     const channel = channelRef.current;
@@ -82,6 +102,15 @@ export default function PatientForm() {
 
       if (status === "SUBSCRIBED") {
         setIsConnected(true);
+
+        channel.send({
+          type: "broadcast",
+          event: PATIENT_RESET_EVENT,
+          payload: {
+            updatedAt: new Date().toISOString(),
+          },
+        });
+
         console.log("Patient Realtime connected ✅");
       }
 
@@ -97,18 +126,13 @@ export default function PatientForm() {
   }, []);
 
   useEffect(() => {
-    if (!isConnected) {
+    if (!isConnected || hasSubmittedRef.current || !hasPatientInput) {
       return;
     }
 
     const channel = channelRef.current;
 
     if (!channel) {
-      return;
-    }
-
-    // Don't send "active" after the patient has submitted.
-    if (hasSubmittedRef.current) {
       return;
     }
 
@@ -121,7 +145,45 @@ export default function PatientForm() {
         updatedAt: new Date().toISOString(),
       },
     });
-  }, [patient, isConnected]);
+  }, [patient, isConnected, hasPatientInput]);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const response = await fetch(
+          "https://countries.dev/countries?fields=name,alpha2Code,flag,languages&sort=name",
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch country data");
+        }
+
+        const data: Country[] = await response.json();
+
+        setCountries(data);
+
+        const languageMap = new Map<string, Language>();
+
+        data.forEach((country) => {
+          country.languages?.forEach((language) => {
+            if (language.iso639_1 && !languageMap.has(language.iso639_1)) {
+              languageMap.set(language.iso639_1, language);
+            }
+          });
+        });
+
+        const uniqueLanguages = Array.from(languageMap.values()).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
+
+        setLanguages(uniqueLanguages);
+      } catch (error) {
+        console.error("Failed to load countries/languages:", error);
+      }
+    };
+
+    fetchOptions();
+  }, []);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -132,6 +194,7 @@ export default function PatientForm() {
         </h2>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2">
+          {/* First Name */}
           <div>
             <label
               htmlFor="firstName"
@@ -144,7 +207,7 @@ export default function PatientForm() {
               id="firstName"
               type="text"
               {...register("firstName")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={inputClassName}
               placeholder="Enter first name"
             />
 
@@ -155,6 +218,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Middle Name */}
           <div>
             <label
               htmlFor="middleName"
@@ -167,11 +231,12 @@ export default function PatientForm() {
               id="middleName"
               type="text"
               {...register("middleName")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={inputClassName}
               placeholder="Enter middle name"
             />
           </div>
 
+          {/* Last Name */}
           <div>
             <label
               htmlFor="lastName"
@@ -184,7 +249,7 @@ export default function PatientForm() {
               id="lastName"
               type="text"
               {...register("lastName")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={inputClassName}
               placeholder="Enter last name"
             />
 
@@ -195,6 +260,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Date of Birth */}
           <div>
             <label
               htmlFor="dateOfBirth"
@@ -207,7 +273,9 @@ export default function PatientForm() {
               id="dateOfBirth"
               type="date"
               {...register("dateOfBirth")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={`${selectClassName} ${
+                patient.dateOfBirth ? "text-gray-900" : "text-gray-400"
+              }`}
             />
 
             {errors.dateOfBirth && (
@@ -217,6 +285,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Gender */}
           <div>
             <label
               htmlFor="gender"
@@ -228,7 +297,9 @@ export default function PatientForm() {
             <select
               id="gender"
               {...register("gender")}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none transition focus:border-black"
+              className={`${selectClassName} ${
+                patient.gender ? "text-gray-900" : "text-gray-400"
+              }`}
             >
               <option value="">Select gender</option>
               <option value="male">Male</option>
@@ -244,6 +315,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Phone */}
           <div>
             <label
               htmlFor="phone"
@@ -252,12 +324,23 @@ export default function PatientForm() {
               Phone Number *
             </label>
 
-            <input
-              id="phone"
-              type="tel"
-              {...register("phone")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
-              placeholder="Enter phone number"
+            <Controller
+              name="phone"
+              control={control}
+              render={({ field }) => (
+                <PhoneInput
+                  id="phone"
+                  international
+                  defaultCountry="TH"
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  className={`phone-input ${
+                    field.value ? "phone-input-filled" : ""
+                  }`}
+                  placeholder="Enter phone number"
+                />
+              )}
             />
 
             {errors.phone && (
@@ -267,6 +350,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Email */}
           <div>
             <label
               htmlFor="email"
@@ -279,7 +363,7 @@ export default function PatientForm() {
               id="email"
               type="email"
               {...register("email")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={inputClassName}
               placeholder="Enter email"
             />
 
@@ -290,6 +374,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Nationality */}
           <div>
             <label
               htmlFor="nationality"
@@ -298,13 +383,21 @@ export default function PatientForm() {
               Nationality *
             </label>
 
-            <input
+            <select
               id="nationality"
-              type="text"
               {...register("nationality")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
-              placeholder="Enter nationality"
-            />
+              className={`${selectClassName} ${
+                patient.nationality ? "text-gray-900" : "text-gray-400"
+              }`}
+            >
+              <option value="">Select nationality</option>
+
+              {countries.map((country) => (
+                <option key={country.alpha2Code} value={country.name}>
+                  {country.flag} {country.name}
+                </option>
+              ))}
+            </select>
 
             {errors.nationality && (
               <p className="mt-1 text-sm text-red-500">
@@ -313,6 +406,7 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Preferred Language */}
           <div>
             <label
               htmlFor="preferredLanguage"
@@ -324,14 +418,17 @@ export default function PatientForm() {
             <select
               id="preferredLanguage"
               {...register("preferredLanguage")}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none transition focus:border-black"
+              className={`${selectClassName} ${
+                patient.preferredLanguage ? "text-gray-900" : "text-gray-400"
+              }`}
             >
               <option value="">Select language</option>
-              <option value="english">English</option>
-              <option value="thai">Thai</option>
-              <option value="chinese">Chinese</option>
-              <option value="japanese">Japanese</option>
-              <option value="other">Other</option>
+
+              {languages.map((language) => (
+                <option key={language.iso639_1} value={language.name}>
+                  {language.name}
+                </option>
+              ))}
             </select>
 
             {errors.preferredLanguage && (
@@ -341,6 +438,32 @@ export default function PatientForm() {
             )}
           </div>
 
+          {/* Religion */}
+          <div>
+            <label
+              htmlFor="religion"
+              className="mb-2 block text-sm font-medium text-gray-700"
+            >
+              Religion
+            </label>
+
+            <select
+              id="religion"
+              {...register("religion")}
+              className={`${selectClassName} ${
+                patient.religion ? "text-gray-900" : "text-gray-400"
+              }`}
+            >
+              <option value="">Select religion</option>
+              <option value="Buddhism">Buddhism</option>
+              <option value="Christianity">Christianity</option>
+              <option value="Islam">Islam</option>
+              <option value="Other">Other</option>
+              <option value="Prefer not to say">Prefer not to say</option>
+            </select>
+          </div>
+
+          {/* Address */}
           <div className="md:col-span-2">
             <label
               htmlFor="address"
@@ -353,7 +476,7 @@ export default function PatientForm() {
               id="address"
               {...register("address")}
               rows={4}
-              className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={textareaClassName}
               placeholder="Enter address"
             />
 
@@ -372,9 +495,8 @@ export default function PatientForm() {
           Emergency Contact
         </h2>
 
-        <p className="mt-1 text-sm text-gray-500">Optional</p>
-
         <div className="mt-6 grid gap-5 md:grid-cols-2">
+          {/* Emergency Contact Name */}
           <div>
             <label
               htmlFor="emergencyContactName"
@@ -387,11 +509,12 @@ export default function PatientForm() {
               id="emergencyContactName"
               type="text"
               {...register("emergencyContactName")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={inputClassName}
               placeholder="Enter emergency contact name"
             />
           </div>
 
+          {/* Relationship */}
           <div>
             <label
               htmlFor="emergencyContactRelationship"
@@ -404,43 +527,20 @@ export default function PatientForm() {
               id="emergencyContactRelationship"
               type="text"
               {...register("emergencyContactRelationship")}
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
+              className={inputClassName}
               placeholder="e.g. Parent, Spouse"
             />
           </div>
         </div>
       </section>
 
-      {/* Other Information */}
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Other Information
-        </h2>
-
-        <div className="mt-6">
-          <label
-            htmlFor="religion"
-            className="mb-2 block text-sm font-medium text-gray-700"
-          >
-            Religion
-          </label>
-
-          <input
-            id="religion"
-            type="text"
-            {...register("religion")}
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black"
-            placeholder="Enter religion"
-          />
-        </div>
-      </section>
-
+      {/* Submit */}
       <div className="flex justify-end">
         <button
           type="submit"
-          className="w-full rounded-xl bg-black px-6 py-3 font-medium text-white transition hover:bg-gray-800 md:w-auto"
+          className="w-full rounded-xl bg-black px-6 py-3 font-bold text-white transition hover:bg-gray-800 md:w-auto"
         >
-          Submit Information
+          Submit
         </button>
       </div>
     </form>
