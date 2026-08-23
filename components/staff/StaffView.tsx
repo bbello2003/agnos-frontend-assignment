@@ -62,6 +62,23 @@ export default function StaffView() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!lastUpdated || status === "submitted") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const lastUpdateTime = new Date(lastUpdated).getTime();
+      const now = Date.now();
+
+      if (now - lastUpdateTime >= 5000) {
+        setStatus("inactive");
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdated, status]);
+
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
