@@ -1,15 +1,19 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { patientSchema } from "@/lib/validation";
+import { supabase } from "@/lib/supabase";
+import { PATIENT_CHANNEL, PATIENT_UPDATE_EVENT } from "@/lib/realtime";
 import type { Patient } from "@/types/patient";
 
 export default function PatientForm() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<Patient>({
     resolver: zodResolver(patientSchema),
@@ -30,9 +34,94 @@ export default function PatientForm() {
     },
   });
 
-  const onSubmit = (data: Patient) => {
-    console.log("Patient data:", data);
+  const patient = useWatch({
+    control,
+  });
+
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const [isConnected, setIsConnected] = useState(false);
+
+  const hasSubmittedRef = useRef(false);
+
+  const onSubmit = async (data: Patient) => {
+    const channel = channelRef.current;
+
+    if (!channel) {
+      console.error("Realtime channel is not connected");
+      return;
+    }
+
+    hasSubmittedRef.current = true;
+
+    const result = await channel.send({
+      type: "broadcast",
+      event: PATIENT_UPDATE_EVENT,
+      payload: {
+        patient: data,
+        status: "submitted",
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    console.log("Submit result:", result);
+    console.log("Patient submitted:", data);
   };
+
+  useEffect(() => {
+    const channel = supabase.channel(PATIENT_CHANNEL);
+
+    channelRef.current = channel;
+
+    channel.subscribe((status, error) => {
+      console.log("Patient Realtime status:", status);
+
+      if (error) {
+        console.error("Patient Realtime error:", error);
+      }
+
+      if (status === "SUBSCRIBED") {
+        setIsConnected(true);
+        console.log("Patient Realtime connected ✅");
+      }
+
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        setIsConnected(false);
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) {
+      return;
+    }
+
+    const channel = channelRef.current;
+
+    if (!channel) {
+      return;
+    }
+
+    // Don't send "active" after the patient has submitted.
+    if (hasSubmittedRef.current) {
+      return;
+    }
+
+    channel.send({
+      type: "broadcast",
+      event: PATIENT_UPDATE_EVENT,
+      payload: {
+        patient,
+        status: "active",
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  }, [patient, isConnected]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
