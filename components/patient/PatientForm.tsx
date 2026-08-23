@@ -126,13 +126,29 @@ export default function PatientForm() {
   }, []);
 
   useEffect(() => {
-    if (!isConnected || hasSubmittedRef.current || !hasPatientInput) {
+    if (!isConnected || hasSubmittedRef.current) {
       return;
     }
 
     const channel = channelRef.current;
 
     if (!channel) {
+      return;
+    }
+
+    const hasPatientInput = Object.values(patient).some(
+      (value) => typeof value === "string" && value.trim() !== "",
+    );
+
+    if (!hasPatientInput) {
+      channel.send({
+        type: "broadcast",
+        event: PATIENT_RESET_EVENT,
+        payload: {
+          updatedAt: new Date().toISOString(),
+        },
+      });
+
       return;
     }
 
@@ -145,7 +161,7 @@ export default function PatientForm() {
         updatedAt: new Date().toISOString(),
       },
     });
-  }, [patient, isConnected, hasPatientInput]);
+  }, [patient, isConnected]);
 
   useEffect(() => {
     const fetchOptions = async () => {
