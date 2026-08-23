@@ -123,7 +123,7 @@ The form sends an `active` update when a patient changes a field. On submit, it 
 ## Real-time Synchronization Flow
 
 ```text
-PatientForm
+   PatientForm
 		|
 		| Supabase Broadcast: patient-update
 		| payload: patient, status, updatedAt
@@ -131,7 +131,7 @@ PatientForm
 Supabase Realtime Channel: patient-room
 		|
 		v
-StaffView
+    StaffView
 		|
 		| Update patient details and status
 		v
