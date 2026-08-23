@@ -53,7 +53,6 @@ export default function StaffView() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [status, setStatus] = useState<PatientStatus>("inactive");
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
 
   const latestUpdatedAtRef = useRef(0);
 
@@ -94,7 +93,6 @@ export default function StaffView() {
         }
 
         if (channelStatus === "SUBSCRIBED") {
-          setIsConnected(true);
           console.log("Staff Realtime connected ✅");
           return;
         }
@@ -103,7 +101,7 @@ export default function StaffView() {
           channelStatus === "CHANNEL_ERROR" ||
           channelStatus === "TIMED_OUT"
         ) {
-          setIsConnected(false);
+          console.error("Staff Realtime unavailable");
         }
       });
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { CalendarDays, ChevronDown } from "lucide-react";
 import PhoneInput from "react-phone-number-input";
 
 import { patientSchema } from "@/lib/validation";
@@ -54,7 +55,9 @@ export default function PatientForm() {
   const patient = useWatch({ control });
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const hasSubmittedRef = useRef(false);
+  const dateOfBirthRegistration = register("dateOfBirth");
 
   const [isConnected, setIsConnected] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
@@ -198,7 +201,12 @@ export default function PatientForm() {
   }, []);
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+    <form
+      onSubmit={(event) => {
+        void handleSubmit(onSubmit)(event);
+      }}
+      className="space-y-8"
+    >
       {/* Personal Information */}
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-900">
@@ -281,14 +289,39 @@ export default function PatientForm() {
               Date of Birth *
             </label>
 
-            <input
-              id="dateOfBirth"
-              type="date"
-              {...register("dateOfBirth")}
-              className={`${selectClassName} ${
-                patient.dateOfBirth ? "text-gray-900" : "text-gray-400"
-              }`}
-            />
+            <div className="date-input-wrapper">
+              <input
+                id="dateOfBirth"
+                type="date"
+                {...dateOfBirthRegistration}
+                ref={(element) => {
+                  dateOfBirthRegistration.ref(element);
+                  dateInputRef.current = element;
+                }}
+                className={`date-input ${patient.dateOfBirth ? "" : "date-input-empty"}`}
+              />
+              {!patient.dateOfBirth && (
+                <span className="date-input-placeholder" aria-hidden="true">
+                  dd/mm/yyyy
+                </span>
+              )}
+              <button
+                type="button"
+                className="date-input-icon-button"
+                aria-label="Choose date of birth"
+                onClick={() => {
+                  dateInputRef.current?.showPicker?.();
+                  dateInputRef.current?.focus();
+                }}
+              >
+                <CalendarDays
+                  aria-hidden="true"
+                  className="date-input-icon"
+                  size={18}
+                  strokeWidth={1.75}
+                />
+              </button>
+            </div>
 
             {errors.dateOfBirth && (
               <p className="mt-1 text-sm text-red-500">
@@ -306,19 +339,22 @@ export default function PatientForm() {
               Gender *
             </label>
 
-            <select
-              id="gender"
-              {...register("gender")}
-              className={`${selectClassName} ${
-                patient.gender ? "text-gray-900" : "text-gray-400"
-              }`}
-            >
-              <option value="">Select gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-              <option value="prefer_not_to_say">Prefer not to say</option>
-            </select>
+            <div className="select-wrapper">
+              <select
+                id="gender"
+                {...register("gender")}
+                className={`${selectClassName} ${
+                  patient.gender ? "text-gray-900" : "text-gray-400"
+                }`}
+              >
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="prefer_not_to_say">Prefer not to say</option>
+              </select>
+              <ChevronDown className="select-icon" size={18} aria-hidden="true" />
+            </div>
 
             {errors.gender && (
               <p className="mt-1 text-sm text-red-500">
@@ -395,21 +431,24 @@ export default function PatientForm() {
               Nationality *
             </label>
 
-            <select
-              id="nationality"
-              {...register("nationality")}
-              className={`${selectClassName} ${
-                patient.nationality ? "text-gray-900" : "text-gray-400"
-              }`}
-            >
-              <option value="">Select nationality</option>
+            <div className="select-wrapper">
+              <select
+                id="nationality"
+                {...register("nationality")}
+                className={`${selectClassName} ${
+                  patient.nationality ? "text-gray-900" : "text-gray-400"
+                }`}
+              >
+                <option value="">Select nationality</option>
 
-              {countries.map((country) => (
-                <option key={country.alpha2Code} value={country.name}>
-                  {country.flag} {country.name}
-                </option>
-              ))}
-            </select>
+                {countries.map((country) => (
+                  <option key={country.alpha2Code} value={country.name}>
+                    {country.flag} {country.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="select-icon" size={18} aria-hidden="true" />
+            </div>
 
             {errors.nationality && (
               <p className="mt-1 text-sm text-red-500">
@@ -427,21 +466,24 @@ export default function PatientForm() {
               Preferred Language *
             </label>
 
-            <select
-              id="preferredLanguage"
-              {...register("preferredLanguage")}
-              className={`${selectClassName} ${
-                patient.preferredLanguage ? "text-gray-900" : "text-gray-400"
-              }`}
-            >
-              <option value="">Select language</option>
+            <div className="select-wrapper">
+              <select
+                id="preferredLanguage"
+                {...register("preferredLanguage")}
+                className={`${selectClassName} ${
+                  patient.preferredLanguage ? "text-gray-900" : "text-gray-400"
+                }`}
+              >
+                <option value="">Select language</option>
 
-              {languages.map((language) => (
-                <option key={language.iso639_1} value={language.name}>
-                  {language.name}
-                </option>
-              ))}
-            </select>
+                {languages.map((language) => (
+                  <option key={language.iso639_1} value={language.name}>
+                    {language.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="select-icon" size={18} aria-hidden="true" />
+            </div>
 
             {errors.preferredLanguage && (
               <p className="mt-1 text-sm text-red-500">
@@ -459,20 +501,23 @@ export default function PatientForm() {
               Religion
             </label>
 
-            <select
-              id="religion"
-              {...register("religion")}
-              className={`${selectClassName} ${
-                patient.religion ? "text-gray-900" : "text-gray-400"
-              }`}
-            >
-              <option value="">Select religion</option>
-              <option value="Buddhism">Buddhism</option>
-              <option value="Christianity">Christianity</option>
-              <option value="Islam">Islam</option>
-              <option value="Other">Other</option>
-              <option value="Prefer not to say">Prefer not to say</option>
-            </select>
+            <div className="select-wrapper">
+              <select
+                id="religion"
+                {...register("religion")}
+                className={`${selectClassName} ${
+                  patient.religion ? "text-gray-900" : "text-gray-400"
+                }`}
+              >
+                <option value="">Select religion</option>
+                <option value="Buddhism">Buddhism</option>
+                <option value="Christianity">Christianity</option>
+                <option value="Islam">Islam</option>
+                <option value="Other">Other</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+              </select>
+              <ChevronDown className="select-icon" size={18} aria-hidden="true" />
+            </div>
           </div>
 
           {/* Address */}
