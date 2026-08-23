@@ -289,7 +289,7 @@ export default function PatientForm() {
               id="dateOfBirth"
               type="date"
               {...register("dateOfBirth")}
-              className={`${selectClassName} ${
+              className={`date-input h-12 w-full rounded-xl border border-gray-300 bg-white px-4 outline-none transition focus:border-black ${
                 patient.dateOfBirth ? "text-gray-900" : "text-gray-400"
               }`}
             />
