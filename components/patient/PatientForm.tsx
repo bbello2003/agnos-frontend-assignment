@@ -60,10 +60,6 @@ export default function PatientForm() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [languages, setLanguages] = useState<Language[]>([]);
 
-  const hasPatientInput = Object.values(patient).some(
-    (value) => typeof value === "string" && value.trim() !== "",
-  );
-
   const onSubmit = async (data: Patient) => {
     const channel = channelRef.current;
 
@@ -289,7 +285,7 @@ export default function PatientForm() {
               id="dateOfBirth"
               type="date"
               {...register("dateOfBirth")}
-              className={`date-input h-12 w-full rounded-xl border border-gray-300 bg-white px-4 outline-none transition focus:border-black ${
+              className={`${selectClassName} ${
                 patient.dateOfBirth ? "text-gray-900" : "text-gray-400"
               }`}
             />
