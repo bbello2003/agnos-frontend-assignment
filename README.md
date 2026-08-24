@@ -9,7 +9,7 @@ This project was developed as part of the Agnos Frontend Developer Candidate Ass
 ## Live Demo
 
 **Deployed Application:**
-https://agnos-frontend-assignment-9rq0k3dst-ppasikapong-4212s-projects.vercel.app/
+https://agnos-frontend-assignment-ten.vercel.app/
 
 ## Features
 
